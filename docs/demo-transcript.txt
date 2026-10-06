@@ -1,0 +1,300 @@
+  SENTINEL — Northwind Financial
+  the control plane for AI agents · in-process ASGI application
+
+  ────────────────────────────────────────────────────────────────────────────
+  Four AI agents run in production against a Postgres holding borrower
+  PII. Nobody at Northwind can say which of them can reach it.
+  ────────────────────────────────────────────────────────────────────────────
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ACT 0  THE EMPTY GRAPH
+  What a security product says before it has been told anything.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+▸ Asking for coverage on a tenant nothing has been collected for
+  │ no source has been collected — the graph is empty by default, not by
+  │ observation
+  ✓ an empty graph reports itself as empty, not as clean
+
+  │ Every dashboard in this category would show zero findings here. Zero
+  │ findings and zero knowledge render identically, and only one of them is
+  │ good news. The rest of this demo is about never confusing the two.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ACT 1  OBSERVE — the graph installs itself
+  No cloud credentials. No IAM read role. No agent to deploy.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+▸ Replaying 44 agent calls through /v1/guard/execute-tool
+  ✓ support-copilot → kb_search ×12 → allowed
+  ✓ support-copilot → ticket_update ×8 → allowed
+  ✓ support-copilot → sql_runner ×3 → allowed
+  ✓ devops-copilot → sql_runner ×5 → allowed
+  ✓ devops-copilot → deploy_migration ×2 → allowed
+  ✓ underwriting-assistant → score_lookup ×4 → allowed
+  ✓ collections-agent → payment_lookup ×6 → allowed
+  ✓ collections-agent → refund_issue ×4 → denied
+
+▸ Folding what the gateway saw into the graph
+    source                                 gateway-observation
+    status                                 PARTIAL
+    nodes written                          14
+    edges written                          11
+
+  │ observed 7 exercised grant(s) across 4 agent(s); 1 agent/tool pair(s)
+  │ were only ever denied and are recorded as behaviour, not as grants
+  │ coverage is permanently partial: traffic reveals grants that were used,
+  │ never grants that exist but were not
+  ✓ observation never claims complete coverage, at any volume
+  ✓ four denied refund attempts produced no grant
+
+  │ SENTINEL now knows which agents exist and which tools they actually
+  │ exercise — from traffic it was already carrying. It does not yet know
+  │ what any of those tools reach.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ACT 2  DESCRIBE — the half traffic cannot see
+  What the tools reach, and which grants exist but were never used.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+▸ Ingesting the environment manifest as a second, independent source
+    source                                 manifest
+    status                                 complete
+    nodes written                          29
+    edges written                          25
+
+
+▸ Coverage after two sources
+  · gateway-observation                    PARTIAL
+  · manifest                               COMPLETE
+
+  │ incomplete coverage from: gateway-observation
+  ✓ two sources do not add up to complete coverage
+
+  │ The manifest declares support-copilot holding support-tools and nothing
+  │ else. Its production SQL access appears in no configuration file — a
+  │ scanner would not find it. Traffic found it in Act 1. Neither source
+  │ alone describes this environment.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ACT 3  DISCOVER — routes, not findings
+  A finding is a fact about one object. A path is a fact about your business.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+▸ 16 route(s) to sensitive data — 4 critical
+
+  CRITICAL                     risk 80.0   4 hops
+    agent:devops-copilot  →  cap:ci-deploy  →  tool:deploy_migration  →  resource:prod-db  →  dataset:borrower-pii
+
+  CRITICAL                     risk 70.0   4 hops
+    agent:devops-copilot  →  cap:observed:devops-copilot  →  tool:sql_runner  →  resource:prod-db  →  dataset:borrower-pii
+    ⚠ privilege never characterised for: cap:observed:devops-copilot
+
+  CRITICAL                     risk 70.0   4 hops
+    agent:devops-copilot  →  cap:observed:devops-copilot  →  tool:deploy_migration  →  resource:prod-db  →  dataset:borrower-pii
+    ⚠ privilege never characterised for: cap:observed:devops-copilot
+
+  CRITICAL                     risk 70.0   5 hops
+    identity:sre-oncall  →  agent:devops-copilot  →  cap:ci-deploy  →  tool:deploy_migration  →  resource:prod-db  →  dataset:borrower-pii
+
+  HIGH                         risk 60.0   5 hops
+    identity:sre-oncall  →  agent:devops-copilot  →  cap:observed:devops-copilot  →  tool:sql_runner  →  resource:prod-db  →  dataset:borrower-pii
+    ⚠ privilege never characterised for: cap:observed:devops-copilot
+
+  HIGH                         risk 60.0   4 hops
+    agent:support-copilot  →  cap:observed:support-copilot  →  tool:sql_runner  →  resource:prod-db  →  dataset:borrower-pii
+    ⚠ privilege never characterised for: cap:observed:support-copilot
+
+  HIGH                         risk 60.0   5 hops
+    identity:sre-oncall  →  agent:devops-copilot  →  cap:observed:devops-copilot  →  tool:deploy_migration  →  resource:prod-db  →  dataset:borrower-pii
+    ⚠ privilege never characterised for: cap:observed:devops-copilot
+
+  HIGH                         risk 50.0   4 hops
+    agent:collections-agent  →  cap:observed:collections-agent  →  tool:payment_lookup  →  resource:ledger-db  →  dataset:payment-records
+    ⚠ privilege never characterised for: cap:observed:collections-agent
+
+  HIGH                         risk 50.0   5 hops
+    identity:support-lead  →  agent:support-copilot  →  cap:observed:support-copilot  →  tool:sql_runner  →  resource:prod-db  →  dataset:borrower-pii
+    ⚠ privilege never characterised for: cap:observed:support-copilot
+
+  HIGH                         risk 50.0   4 hops
+    agent:collections-agent  →  cap:collections-tools  →  tool:payment_lookup  →  resource:ledger-db  →  dataset:payment-records
+
+  HIGH                         risk 45.0   4 hops
+    agent:underwriting-assistant  →  cap:risk-model-read  →  tool:score_lookup  →  resource:risk-warehouse  →  dataset:credit-scores
+    ⚠ privilege never characterised for: agent:underwriting-assistant
+
+  ELEVATED                     risk 40.0   5 hops
+    identity:collections-lead  →  agent:collections-agent  →  cap:collections-tools  →  tool:payment_lookup  →  resource:ledger-db  →  dataset:payment-records
+
+  ELEVATED                     risk 40.0   5 hops
+    identity:collections-lead  →  agent:collections-agent  →  cap:observed:collections-agent  →  tool:payment_lookup  →  resource:ledger-db  →  dataset:payment-records
+    ⚠ privilege never characterised for: cap:observed:collections-agent
+
+  ELEVATED                     risk 37.5   5 hops
+    identity:risk-analyst  →  agent:underwriting-assistant  →  cap:risk-model-read  →  tool:score_lookup  →  resource:risk-warehouse  →  dataset:credit-scores
+    ⚠ privilege never characterised for: agent:underwriting-assistant
+
+  ELEVATED                     risk 25.5   5 hops
+    identity:risk-analyst  →  agent:underwriting-assistant  →  cap:observed:underwriting-assistant  →  tool:score_lookup  →  resource:risk-warehouse  →  dataset:credit-scores
+    ⚠ privilege never characterised for: agent:underwriting-assistant, cap:observed:underwriting-assistant
+
+  INFORMATIONAL                risk 15.0   4 hops
+    agent:underwriting-assistant  →  cap:observed:underwriting-assistant  →  tool:score_lookup  →  resource:risk-warehouse  →  dataset:credit-scores
+    ⚠ privilege never characterised for: agent:underwriting-assistant, cap:observed:underwriting-assistant
+  ✓ at least one critical route reaches regulated data
+  ✓ traversal reports whether it was exhaustive
+
+  │ Two of these routes end at the same regulated dataset from the same
+  │ operator, through different tools. Cutting one and declaring victory is
+  │ the mistake the verification step in Act 5 is built to catch.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ACT 4  ASSESS — the number, and what undermines it
+  The same code path as remediation, with the acting switched off.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+▸ Read-only posture
+    critical paths discovered              4
+    critical paths open                    4
+    paths through uncharacterised principals 12
+    weighted risk reduction                0.0%
+
+
+▸ The headline this product would print on a board deck
+  │ COVERAGE INCOMPLETE — incomplete coverage from: gateway-observation; 4
+  │ open path(s) is a coverage figure, not a security one
+  ✓ the headline leads with the caveat, not the percentage
+  ✓ an assessment changed nothing
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ACT 5  REMEDIATE — and prove it
+  Plan the minimum cut, apply it reversibly, then attack it again.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+▸ Dry run first — what would change
+    mode                                   dry_run
+    executed                               False
+
+▸ Enforcing
+    remediation actions                    1
+    independent verdicts                   2
+    actions verified                       1
+    actions rolled back                    0
+  ✓ actions left unverified                0
+    routes proved closed                   4
+    critical routes still open             0
+    weighted risk reduction                100.0%
+    evidence chain head                    1ec71b97702a2d36fcb29a31143670ed…
+
+
+▸ The headline now
+  │ NO CRITICAL PATHS, BUT 8 PATH(S) CROSS PRINCIPALS WITH NO PRIVILEGE DATA
+  │ — criticality may be understated
+  ✓ no action was left applied without a verified benefit
+  ✓ closure was proved by re-derivation, not by absence
+  ✓ the evidence chain is sealed and addressable
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ACT 6  ENFORCE — the same calls, now refused
+  The difference between changing a picture and changing what is possible.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+▸ The agent whose routes were cut repeats exactly what it did in Act 1
+    devops-copilot → deploy_migration      DENIED
+  │ capability revoked by remediation:
+  │ cap:ci-deploy|grants|tool:deploy_migration,
+  │ cap:observed:devops-copilot|grants|tool:deploy_migration
+    devops-copilot → sql_runner            DENIED
+  │ capability revoked by remediation:
+  │ cap:observed:devops-copilot|grants|tool:sql_runner
+  ✓ every route the remediation cut is refused in the request path
+  ✓ the refusal names the edge that was revoked
+
+▸ Every other agent, unchanged
+    support-copilot → kb_search            ALLOWED
+    support-copilot → sql_runner           ALLOWED
+    collections-agent → payment_lookup     ALLOWED
+    underwriting-assistant → score_lookup  ALLOWED
+  ✓ remediation cut four routes and broke nothing else
+
+  │ support-copilot still reaches production SQL. That route scored HIGH,
+  │ not CRITICAL, so this cycle did not cut it — and the product says so
+  │ rather than implying the environment is now clean. The gate blocks what
+  │ was proved closed and nothing else.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ACT 7  CONTEST — when the source disagrees
+  The act that makes the number go down, on purpose.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+▸ Next scheduled collection runs. Nothing changed in the source systems.
+  │ SENTINEL recorded a revocation. The manifest — the customer's own
+  │ description of their environment — still declares the grant. In the
+  │ field this is the normal case: the ticket was closed, the IAM change was
+  │ never applied.
+
+▸ Re-collection result
+    contested edges                        3
+    ⚠ cap:ci-deploy|grants|tool:deploy_migration
+    ⚠ cap:observed:devops-copilot|grants|tool:deploy_migration
+    ⚠ cap:observed:devops-copilot|grants|tool:sql_runner
+  ✓ re-collection did not silently restore the revoked grant
+
+
+▸ The headline, after the product found out it might be wrong
+  │ 3 CONTESTED REMEDIATION(S) — the source still reports a grant SENTINEL
+  │ recorded as revoked
+  ✓ the headline degrades itself when the source contradicts it
+
+  │ No security vendor's dashboard does this. The percentage was real and
+  │ SENTINEL replaced it with the reason you should not trust it yet. That
+  │ is the product.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ACT 8  THE MAP — every source, every fact with its origin
+  The graph answers one question. The ontology answers it across the estate, and says who said what.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+▸ Folding the graph, the findings, the assets and the incidents into one map
+    objects                                33
+    links                                  33
+    sources                                assets=complete, findings=complete, graph=partial, incidents=complete, roster=complete
+  ✓ the graph reports itself PARTIAL on the map, as it does everywhere
+
+▸ A customer's CMDB export becomes a source — one name, one claim, a hash
+  │ A real export has hostnames, not links. It is stored under the name the
+  │ customer gave it, with a completeness claim they made, hashed, and
+  │ chained into the ledger before the call returns.
+    sha256                                 988c1f546e4253a8…
+    ledger                                 de942429a0328083…
+  ✓ the export folds by the same rules as any connector
+
+▸ The resolver proposes. Nobody has linked anything.
+    asset:pay-db-01 ─same_as→ resource:ledger-db   80%: hostname 'ledger-db' is the resource's id
+  ✓ a hostname in the export was paired with the graph's resource — as a proposal
+  ✓ a proposal is not a link — accepting it is a person's word, chained under their name
+
+▸ Reached from: which agents can get to the payment records, and how
+    collections-agent      4 hops   agent:collections-agent → capability:collections-tools → tool:payment_lookup → resource:ledger-db → dataset:payment-records
+  ✓ connectivity, not risk — the map lists routes; the graph scores them
+  ✓ the cut from Act 5 holds on the map: devops-copilot has no route to borrower PII
+  │ Open the Control Room → Ontology. The proposal is waiting for a person
+  │ to confirm it; that click is the link action, under their name, in the
+  │ ledger. Then classify the dataset and watch the disagreement stay.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  EIGHT ACTS · 30 INVARIANTS ASSERTED · 0.5s
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  What a buyer just watched:
+    1. It built its own graph from traffic it was already carrying.
+    2. It said, unprompted, what it could not see.
+    3. It found a route to regulated data through an agent nobody suspected.
+    4. It cut the route, then attacked the cut to prove it held.
+    5. The same call stopped working — in the request path, not in a report.
+    6. Then it told on itself when the source system disagreed.
+    7. It folded the estate into one map, took the customer's own export as a
+       source, and proposed the link a person would — without making it.
+
+  artifacts → demo/out/run.json · demo/out/transcript.txt
